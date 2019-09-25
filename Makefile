@@ -1,10 +1,11 @@
 all: NixieClock
 
-NixieClock: NixieClock.o 
+NixieClock: NixieClock.o
 	gcc -o NixieClock NixieClock.o 
 
-NixieClock.o: main.c 
-	gcc -o NixieClock.o -c main.c -W -Wall -ansi -pedantic
+
+NixieClock.o: main.c
+	gcc -o NixieClock.o -c main.c -W -Wall -ansi -pedantic -std=c11
 
 clean:
 	rm -rf *.o
