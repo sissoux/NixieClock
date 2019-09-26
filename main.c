@@ -1,5 +1,5 @@
 
-#include "gpio.h"
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -26,9 +26,6 @@
 #define LOW 0
 #define HIGH 1
 
-#define PIN 24
-#define POUT 13
-
 static int GPIOExport(int pin);
 static int GPIOUnexport(int pin);
 static int GPIODirection(int pin, int dir);
@@ -38,20 +35,20 @@ static int GPIOWrite(int pin, int value);
 int main()
 {
    int fd_spi;
-   unsigned int speed = 10000000;
+   unsigned int speed = 500000;
    uint8_t mode = SPI_MODE_0;
 
    /*
 	 * Enable GPIO pins
 	 */
-   if (-1 == GPIOExport(POUT) || -1 == GPIOExport(PIN))
+   if (-1 == GPIOExport(LED_GPIO) || -1 == GPIOExport(DIMMING_GPIO) || -1 == GPIOExport(BLANKING_GPIO) || -1 == GPIOExport(HV_EN_GPIO))
       return (1);
    sleep(1);
    /*
 
 	 * Set GPIO directions
 	 */
-   if (-1 == GPIODirection(POUT, OUT) || -1 == GPIODirection(PIN, IN))
+   if (-1 == GPIODirection(LED_GPIO, OUT) || -1 == GPIODirection(DIMMING_GPIO, OUT) || -1 == GPIODirection(BLANKING_GPIO, OUT) || -1 == GPIODirection(HV_EN_GPIO, OUT))
       return (2);
    sleep(1);
 
@@ -69,30 +66,31 @@ int main()
       exit(EXIT_FAILURE);
    }
 
-   for (uint8_t i = 0; i < 255; i++)
-   {
-      /*
-		 * Write GPIO value
-		 */
-      if (-1 == GPIOWrite(POUT, i % 2))
-         return (3);
+   if (-1 == GPIOWrite(BLANKING_GPIO, LOW) || -1 == GPIOWrite(HV_EN_GPIO, LOW) || -1 == GPIOWrite(DIMMING_GPIO, HIGH))
+      return (3);
 
-      printf("Sending %d\n", i);
+   printf("Turning on\n");
 
-      uint8_t data[4] = {10, 2 * i, 0, i};
+   uint8_t dataon[4] = {0, 0, 0, 1};
 
-      write(fd_spi, data, 4);
-      usleep(100000);
-   }
+   write(fd_spi, dataon, 4);
+   if (-1 == GPIOWrite(LED_GPIO, HIGH) ||-1 == GPIOWrite(BLANKING_GPIO, HIGH))
+      return (3);
+   sleep(30);
+
+   uint8_t dataoff[4] = {0, 0, 0, 0};
+   printf("turning off\n");
+
+   write(fd_spi, dataoff, 4);
+   if (-1 == GPIOWrite(BLANKING_GPIO, LOW)||-1 == GPIOWrite(LED_GPIO, LOW))
+      return (3);
+   sleep(30);
 
    /*
 	 * Disable GPIO pins
 	 */
-   if (-1 == GPIOUnexport(POUT) || -1 == GPIOUnexport(PIN))
+   if (-1 == GPIOUnexport(LED_GPIO) || -1 == GPIOUnexport(DIMMING_GPIO) || -1 == GPIOUnexport(BLANKING_GPIO) || -1 == GPIOUnexport(HV_EN_GPIO))
       return (4);
-
-   return (0);
-
    return 0;
 }
 
