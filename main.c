@@ -66,25 +66,29 @@ int main()
       exit(EXIT_FAILURE);
    }
 
-   if (-1 == GPIOWrite(BLANKING_GPIO, LOW) || -1 == GPIOWrite(HV_EN_GPIO, LOW) || -1 == GPIOWrite(DIMMING_GPIO, HIGH))
+   if (-1 == GPIOWrite(BLANKING_GPIO, HIGH) || -1 == GPIOWrite(HV_EN_GPIO, LOW) || -1 == GPIOWrite(DIMMING_GPIO, HIGH))
       return (3);
 
    printf("Turning on\n");
 
-   uint8_t dataon[4] = {0, 0, 0, 1};
+   uint8_t dataon[4] = {1, 1, 1, 1};
 
-   write(fd_spi, dataon, 4);
-   if (-1 == GPIOWrite(LED_GPIO, HIGH) ||-1 == GPIOWrite(BLANKING_GPIO, HIGH))
-      return (3);
-   sleep(30);
+   for (uint8_t i = 0; i < 255; i++)
+   {
+      printf("%d\n",i);   
+      write(fd_spi, dataon, 4);
+      if (-1 == GPIOWrite(LED_GPIO, HIGH))
+         return (3);
+      usleep(500000);
+   }
 
    uint8_t dataoff[4] = {0, 0, 0, 0};
    printf("turning off\n");
 
    write(fd_spi, dataoff, 4);
-   if (-1 == GPIOWrite(BLANKING_GPIO, LOW)||-1 == GPIOWrite(LED_GPIO, LOW))
+   if (-1 == GPIOWrite(BLANKING_GPIO, HIGH))
       return (3);
-   sleep(30);
+   sleep(1);
 
    /*
 	 * Disable GPIO pins
