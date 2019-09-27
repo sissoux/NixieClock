@@ -1,5 +1,3 @@
-
-
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -31,65 +29,56 @@ static int GPIOUnexport(int pin);
 static int GPIODirection(int pin, int dir);
 static int GPIORead(int pin);
 static int GPIOWrite(int pin, int value);
+static uint32_t fillOutBuffer(uint32_t hour, uint32_t minute);
+void writeTime(uint32_t buffer);
+void initSPI();
+void initGPIO();
+void enableOutput();
+void disableOutput();
+void freeGPIO();
+
+uint8_t TimeConverterTable[4][10] = {{3, 1, 2, 0, 0, 0, 0, 0, 0, 0}, {29, 4, 5, 6, 7, 24, 25, 26, 27, 28}, {21, 31, 16, 17, 18, 19, 0, 0, 0, 0}, {15, 22, 23, 8, 9, 10, 11, 12, 13, 14}};
+
+int fd_spi;
+unsigned int speed = 500000;
+uint8_t mode = SPI_MODE_0;
+bool IsOutputEnabled = false;
 
 int main()
 {
-   int fd_spi;
-   unsigned int speed = 500000;
-   uint8_t mode = SPI_MODE_0;
+   initGPIO();
+   initSPI();
+   enableOutput();
 
-   /*
-	 * Enable GPIO pins
-	 */
-   if (-1 == GPIOExport(LED_GPIO) || -1 == GPIOExport(DIMMING_GPIO) || -1 == GPIOExport(BLANKING_GPIO) || -1 == GPIOExport(HV_EN_GPIO))
-      return (1);
-   sleep(1);
-   /*
+   writeTime(fillOutBuffer(13, 24));
+   sleep(60);
+   freeGPIO();
+}
 
-	 * Set GPIO directions
-	 */
-   if (-1 == GPIODirection(LED_GPIO, OUT) || -1 == GPIODirection(DIMMING_GPIO, OUT) || -1 == GPIODirection(BLANKING_GPIO, OUT) || -1 == GPIODirection(HV_EN_GPIO, OUT))
-      return (2);
-   sleep(1);
 
-   fd_spi = open("/dev/spidev0.0", O_RDWR);
 
-   if (ioctl(fd_spi, SPI_IOC_WR_MAX_SPEED_HZ, &speed) != 0)
+
+uint32_t fillOutBuffer(uint32_t hour, uint32_t minute)
+{
+   return (uint32_t)1 << (TimeConverterTable[0][hour / 10]) | (uint32_t)1 << (TimeConverterTable[1][hour % 10]) | (uint32_t)1 << (TimeConverterTable[2][minute / 10]) | (uint32_t)1 << (TimeConverterTable[3][minute % 10]);
+}
+
+void writeTime(uint32_t buffer)
+{
+   if (!IsOutputEnabled)
+      enableOutput();
+
+   uint8_t OutBuffer[4];
+   for (int i = 0; i <= 4; i++)
    {
-      perror("ioctl");
-      exit(EXIT_FAILURE);
+      OutBuffer = (uint8_t)(buffer >> (i * 8));
    }
+   write(fd_spi, OutBuffer, 4);
+}
 
-   if (ioctl(fd_spi, SPI_IOC_WR_MODE, &mode) != 0)
-   {
-      perror("ioctl");
-      exit(EXIT_FAILURE);
-   }
 
-   if (-1 == GPIOWrite(BLANKING_GPIO, HIGH) || -1 == GPIOWrite(HV_EN_GPIO, LOW) || -1 == GPIOWrite(DIMMING_GPIO, HIGH))
-      return (3);
-
-   printf("Turning on\n");
-
-   uint8_t dataon[4] = {1, 1, 1, 1};
-
-   for (uint8_t i = 0; i < 255; i++)
-   {
-      printf("%d\n",i);   
-      write(fd_spi, dataon, 4);
-      if (-1 == GPIOWrite(LED_GPIO, HIGH))
-         return (3);
-      usleep(500000);
-   }
-
-   uint8_t dataoff[4] = {0, 0, 0, 0};
-   printf("turning off\n");
-
-   write(fd_spi, dataoff, 4);
-   if (-1 == GPIOWrite(BLANKING_GPIO, HIGH))
-      return (3);
-   sleep(1);
-
+void freeGPIO()
+{
    /*
 	 * Disable GPIO pins
 	 */
@@ -212,4 +201,57 @@ static int GPIOWrite(int pin, int value)
 
    close(fd);
    return (0);
+}
+
+void enableOutput()
+{
+   if (-1 == GPIOWrite(BLANKING_GPIO, HIGH) || -1 == GPIOWrite(HV_EN_GPIO, LOW) || -1 == GPIOWrite(DIMMING_GPIO, HIGH))
+      return (3);
+
+   printf("Turning on\n");
+   IsOutputEnabled = true;
+}
+
+void disableOutput()
+{
+   if (-1 == GPIOWrite(BLANKING_GPIO, LOW) || -1 == GPIOWrite(HV_EN_GPIO, HIGH) || -1 == GPIOWrite(DIMMING_GPIO, LOW))
+      return (3);
+
+   printf("Turning off\n");
+   IsOutputEnabled = false;
+}
+
+void initGPIO()
+{
+
+   /*
+	 * Enable GPIO pins
+	 */
+   if (-1 == GPIOExport(LED_GPIO) || -1 == GPIOExport(DIMMING_GPIO) || -1 == GPIOExport(BLANKING_GPIO) || -1 == GPIOExport(HV_EN_GPIO))
+      return (1);
+   sleep(1);
+   /*
+
+	 * Set GPIO directions
+	 */
+   if (-1 == GPIODirection(LED_GPIO, OUT) || -1 == GPIODirection(DIMMING_GPIO, OUT) || -1 == GPIODirection(BLANKING_GPIO, OUT) || -1 == GPIODirection(HV_EN_GPIO, OUT))
+      return (2);
+   sleep(1);
+}
+
+void initSPI()
+{
+   fd_spi = open("/dev/spidev0.0", O_RDWR);
+
+   if (ioctl(fd_spi, SPI_IOC_WR_MAX_SPEED_HZ, &speed) != 0)
+   {
+      perror("ioctl");
+      exit(EXIT_FAILURE);
+   }
+
+   if (ioctl(fd_spi, SPI_IOC_WR_MODE, &mode) != 0)
+   {
+      perror("ioctl");
+      exit(EXIT_FAILURE);
+   }
 }
