@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <time.h>
 
 #define LED_GPIO 13
 #define DIMMING_GPIO 12
@@ -42,21 +43,28 @@ uint8_t TimeConverterTable[4][10] = {{3, 1, 2, 0, 0, 0, 0, 0, 0, 0}, {29, 4, 5, 
 int fd_spi;
 unsigned int speed = 500000;
 uint8_t mode = SPI_MODE_0;
-bool IsOutputEnabled = false;
+int IsOutputEnabled = 0;
 
 int main()
 {
+   time_t t = time(NULL);
+   struct tm tm = *localtime(&t);
+   printf("now: %d-%d-%d %d:%d:%d\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+
    initGPIO();
    initSPI();
    enableOutput();
-
-   writeTime(fillOutBuffer(13, 24));
-   sleep(60);
+   for (int duration = 0; duration < 120; duration++)
+   {
+      time(&t);
+      tm = *localtime(&t);
+      printf("now: %d-%d-%d %d:%d:%d\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+      writeTime(fillOutBuffer(tm.tm_hour, tm.tm_min));
+      sleep(1);
+   }
+   disableOutput();
    freeGPIO();
 }
-
-
-
 
 uint32_t fillOutBuffer(uint32_t hour, uint32_t minute)
 {
@@ -69,13 +77,21 @@ void writeTime(uint32_t buffer)
       enableOutput();
 
    uint8_t OutBuffer[4];
-   for (int i = 0; i <= 4; i++)
+   uint32_t buffer2 = 0;
+
+   //Reverse Buffer order
+   /*
+   for (int i = 0; i < 4; i++)
    {
-      OutBuffer = (uint8_t)(buffer >> (i * 8));
+      buffer2 = (buffer2 << 8) | (((((uint8_t)(buffer >> (i * 8) & 0xFF)) * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32);
+   }*/
+   for (int i = 0; i < 4; i++)
+   {
+      OutBuffer[3 - i] = ((uint8_t)(buffer >> (i * 8) & 0xFF));
    }
+
    write(fd_spi, OutBuffer, 4);
 }
-
 
 void freeGPIO()
 {
@@ -209,7 +225,7 @@ void enableOutput()
       return (3);
 
    printf("Turning on\n");
-   IsOutputEnabled = true;
+   IsOutputEnabled = 1;
 }
 
 void disableOutput()
@@ -218,7 +234,7 @@ void disableOutput()
       return (3);
 
    printf("Turning off\n");
-   IsOutputEnabled = false;
+   IsOutputEnabled = 0;
 }
 
 void initGPIO()
