@@ -7,9 +7,15 @@
 #include <linux/types.h>
 #include <linux/spi/spidev.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 #include <fcntl.h>
 #include <time.h>
+#include <sys/types.h>
+#include <pthread.h>
+
+#define false 0
+#define true 1
+
+#define NFDS 1
 
 #define LED_GPIO 13
 #define DIMMING_GPIO 12
@@ -37,8 +43,11 @@ void initGPIO();
 void enableOutput();
 void disableOutput();
 void freeGPIO();
+void *UpdateTimeOutput(void *);
 
 uint8_t TimeConverterTable[4][10] = {{3, 1, 2, 0, 0, 0, 0, 0, 0, 0}, {13, 4, 5, 6, 7, 8, 9, 10, 11, 12}, {21, 15, 16, 17, 18, 19, 20, 0, 0, 0}, {31, 22, 23, 24, 25, 26, 27, 28, 29, 30}};
+
+time_t t = NULL;
 
 int fd_spi;
 unsigned int speed = 500000;
@@ -47,23 +56,46 @@ int IsOutputEnabled = 0;
 
 int main()
 {
-   time_t t = time(NULL);
-   struct tm tm = *localtime(&t);
-   printf("now: %d-%d-%d %d:%d:%d\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+
+   if (system("ping -c1 -s1 8.8.8.8"))
+   {
+      printf("There is no internet connection  \n");
+      return;
+   }
+   else
+   {
+      printf("Connected to internet\n");
+   }
 
    initGPIO();
    initSPI();
    enableOutput();
-   for (uint32_t duration = 0; duration < 3600; duration++)
+   pthread_t thread;
+   pthread_create(&thread, NULL, &UpdateTimeOutput, NULL);
+   char s = '\n';
+
+   printf("Press 'q' to quit\n");
+   while (s != 'q')
    {
-      time(&t);
-      tm = *localtime(&t);
-      printf("now: %d-%d-%d %d:%d:%d\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
-      writeTime(fillOutBuffer(tm.tm_hour, tm.tm_min));
-      usleep(100000);
+      scanf("%c", &s);
+      printf("Received char %c\n",s);
    }
+   printf("Shuting down clock\n");
+   pthread_cancel(thread);
+   pthread_join(thread, NULL);
+
    disableOutput();
    freeGPIO();
+   return 0;
+}
+
+void *UpdateTimeOutput(void *retval)
+{
+   time(&t);
+   struct tm Tm = *localtime(&t);
+   //printf("now: %d-%d-%d %d:%d:%d\n", Tm.tm_year + 1900, Tm.tm_mon + 1, Tm.tm_mday, Tm.tm_hour, Tm.tm_min, Tm.tm_sec);
+   writeTime(fillOutBuffer(Tm.tm_hour, Tm.tm_min));
+   sleep(1);
 }
 
 uint32_t fillOutBuffer(uint32_t hour, uint32_t minute)
@@ -78,13 +110,6 @@ void writeTime(uint32_t buffer)
 
    uint8_t OutBuffer[4];
    uint32_t buffer2 = 0;
-
-   //Reverse Buffer order
-   /*
-   for (int i = 0; i < 4; i++)
-   {
-      buffer2 = (buffer2 << 8) | (((((uint8_t)(buffer >> (i * 8) & 0xFF)) * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32);
-   }*/
    for (int i = 0; i < 4; i++)
    {
       OutBuffer[3 - i] = ((uint8_t)(buffer >> (i * 8) & 0xFF));
