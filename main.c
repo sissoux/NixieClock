@@ -12,6 +12,8 @@
 #include <sys/types.h>
 #include <pthread.h>
 
+//#define CONSOLE
+
 #define false 0
 #define true 1
 
@@ -70,19 +72,31 @@ int main()
    initGPIO();
    initSPI();
    enableOutput();
+
+#ifdef CONSOLE
    pthread_t thread;
    pthread_create(&thread, NULL, &UpdateTimeOutput, NULL);
+   
    char s = '\n';
-
    printf("Press 'q' to quit\n");
-   while (1)//s != 'q')
+   while (s != 'q')
    {
-      /*scanf("%c", &s);
-      printf("Received char %c\n",s);*/
+      scanf("%c", &s);
+      printf("Received char %c\n", s);
    }
+
    printf("Shuting down clock\n");
    pthread_cancel(thread);
    pthread_join(thread, NULL);
+#else
+   while (1)
+   {
+      time(&t);
+      struct tm Tm = *localtime(&t);
+      writeTime(fillOutBuffer(Tm.tm_hour, Tm.tm_min));
+      sleep(1);
+   }
+#endif
 
    disableOutput();
    freeGPIO();
@@ -93,7 +107,6 @@ void *UpdateTimeOutput(void *retval)
 {
    time(&t);
    struct tm Tm = *localtime(&t);
-   //printf("now: %d-%d-%d %d:%d:%d\n", Tm.tm_year + 1900, Tm.tm_mon + 1, Tm.tm_mday, Tm.tm_hour, Tm.tm_min, Tm.tm_sec);
    writeTime(fillOutBuffer(Tm.tm_hour, Tm.tm_min));
    sleep(1);
 }
