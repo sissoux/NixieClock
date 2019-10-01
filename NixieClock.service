@@ -3,7 +3,7 @@ Description=Display time on the Nixie tube clock.
 After=multi-user.target
 
 [Service]
-ExecStart=/usr/bin/python3 /home/pi/blink.py
+ExecStart=/home/pi/NixieClock/NixieClock
 
 [Install]
 WantedBy=multi-user.target

@@ -60,7 +60,7 @@ int main()
    if (system("ping -c1 -s1 8.8.8.8"))
    {
       printf("There is no internet connection  \n");
-      return;
+      //return;
    }
    else
    {
@@ -75,10 +75,10 @@ int main()
    char s = '\n';
 
    printf("Press 'q' to quit\n");
-   while (s != 'q')
+   while (1)//s != 'q')
    {
-      scanf("%c", &s);
-      printf("Received char %c\n",s);
+      /*scanf("%c", &s);
+      printf("Received char %c\n",s);*/
    }
    printf("Shuting down clock\n");
    pthread_cancel(thread);
