@@ -11,6 +11,7 @@
 #include <time.h>
 #include <sys/types.h>
 #include <pthread.h>
+#include <errno.h>  
 
 //#define CONSOLE
 
@@ -41,11 +42,12 @@ static int GPIOWrite(int pin, int value);
 static uint32_t fillOutBuffer(uint32_t hour, uint32_t minute);
 void writeTime(uint32_t buffer);
 void initSPI();
-void initGPIO();
-void enableOutput();
-void disableOutput();
-void freeGPIO();
+int initGPIO();
+int enableOutput();
+int disableOutput();
+int freeGPIO();
 void *UpdateTimeOutput(void *);
+int msleep(long msec);
 
 uint8_t TimeConverterTable[4][10] = {{3, 1, 2, 0, 0, 0, 0, 0, 0, 0}, {13, 4, 5, 6, 7, 8, 9, 10, 11, 12}, {21, 15, 16, 17, 18, 19, 20, 0, 0, 0}, {31, 22, 23, 24, 25, 26, 27, 28, 29, 30}};
 
@@ -68,39 +70,41 @@ int main()
    {
       printf("Connected to internet\n");
    }
-
+   uint32_t prevMin = 0;
    initGPIO();
    initSPI();
    enableOutput();
-
-#ifdef CONSOLE
-   pthread_t thread;
-   pthread_create(&thread, NULL, &UpdateTimeOutput, NULL);
-   
-   char s = '\n';
-   printf("Press 'q' to quit\n");
-   while (s != 'q')
-   {
-      scanf("%c", &s);
-      printf("Received char %c\n", s);
-   }
-
-   printf("Shuting down clock\n");
-   pthread_cancel(thread);
-   pthread_join(thread, NULL);
-#else
+   printf("bjr\n");
    while (1)
    {
       time(&t);
       struct tm Tm = *localtime(&t);
+      if (Tm.tm_min % 10 == 0 && prevMin !=Tm.tm_min)
+      {
+         printf("yo\n");
+         prevMin = Tm.tm_min;
+         loopHours(Tm.tm_hour, Tm.tm_min, (Tm.tm_min/10+1)%2);
+      }
       writeTime(fillOutBuffer(Tm.tm_hour, Tm.tm_min));
       sleep(1);
    }
-#endif
-
    disableOutput();
    freeGPIO();
    return 0;
+}
+
+void loopHours(uint32_t hour, uint32_t minute, int dir)
+{
+   printf("looping\n");
+   for (int ctr = 0 ; ctr<= 144; ctr++)
+   {
+      int i = ctr;
+      if(dir == 0) i = 144-ctr;
+      int j = (int)((float)i*60.0/144.0);
+      printf("%d:%d\n",(i/6+hour)%24, ((j%60)+minute)%60);
+      writeTime(fillOutBuffer((i/6+hour)%24, ((j%60)+minute)%60));
+      msleep(10);
+   }
 }
 
 void *UpdateTimeOutput(void *retval)
@@ -131,7 +135,7 @@ void writeTime(uint32_t buffer)
    write(fd_spi, OutBuffer, 4);
 }
 
-void freeGPIO()
+int freeGPIO()
 {
    /*
 	 * Disable GPIO pins
@@ -257,16 +261,16 @@ static int GPIOWrite(int pin, int value)
    return (0);
 }
 
-void enableOutput()
+int enableOutput()
 {
    if (-1 == GPIOWrite(BLANKING_GPIO, HIGH) || -1 == GPIOWrite(HV_EN_GPIO, LOW) || -1 == GPIOWrite(DIMMING_GPIO, HIGH))
       return (3);
 
-   printf("Turning on\n");
+   printf("Turning on !\n");
    IsOutputEnabled = 1;
 }
 
-void disableOutput()
+int disableOutput()
 {
    if (-1 == GPIOWrite(BLANKING_GPIO, LOW) || -1 == GPIOWrite(HV_EN_GPIO, HIGH) || -1 == GPIOWrite(DIMMING_GPIO, LOW))
       return (3);
@@ -275,7 +279,7 @@ void disableOutput()
    IsOutputEnabled = 0;
 }
 
-void initGPIO()
+int initGPIO()
 {
 
    /*
@@ -308,4 +312,25 @@ void initSPI()
       perror("ioctl");
       exit(EXIT_FAILURE);
    }
+}
+/* msleep(): Sleep for the requested number of milliseconds. */
+int msleep(long msec)
+{
+    struct timespec ts;
+    int res;
+
+    if (msec < 0)
+    {
+        errno = EINVAL;
+        return -1;
+    }
+
+    ts.tv_sec = msec / 1000;
+    ts.tv_nsec = (msec % 1000) * 1000000;
+
+    do {
+        res = nanosleep(&ts, &ts);
+    } while (res && errno == EINTR);
+
+    return res;
 }
