@@ -74,7 +74,6 @@ int main()
    initGPIO();
    initSPI();
    enableOutput();
-   printf("bjr\n");
    while (1)
    {
       time(&t);
@@ -101,7 +100,7 @@ void loopHours(uint32_t hour, uint32_t minute, int dir)
       int i = ctr;
       if(dir == 0) i = 144-ctr;
       int j = (int)((float)i*60.0/144.0);
-      printf("%d:%d\n",(i/6+hour)%24, ((j%60)+minute)%60);
+      //printf("%d:%d\n",(i/6+hour)%24, ((j%60)+minute)%60);
       writeTime(fillOutBuffer((i/6+hour)%24, ((j%60)+minute)%60));
       msleep(10);
    }
